@@ -21,6 +21,7 @@ import io.netty.util.AttributeKey;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -127,7 +128,7 @@ public class Publish {
                     MqttPublishMessage publishMessage = (MqttPublishMessage) MqttMessageFactory.newMessage(
                             new MqttFixedHeader(MqttMessageType.PUBLISH, dup, respQoS, retain, 0),
                             new MqttPublishVariableHeader(topic, 0), Unpooled.buffer().writeBytes(messageBytes));
-                    LOGGER.debug("PUBLISH - clientId: {}, topic: {}, Qos: {}", subscribeStore.getClientId(), topic, respQoS.value());
+                    LOGGER.debug("PUBLISH - clientId: {}, topic: {}, Qos: {}, payload: {}", subscribeStore.getClientId(), topic, respQoS.value(), new String(messageBytes));
                     SessionStore sessionStore = sessionStoreService.get(subscribeStore.getClientId());
                     ChannelId channelId = channelIdMap.get(sessionStore.getBrokerId() + "_" + sessionStore.getChannelId());
                     if (channelId != null) {

@@ -38,7 +38,7 @@ mqttwk:
     # 是否开启集群功能
     cluster-on: false
     # 启用ssl验证(含websocket)
-    ssl-enabled: false
+    ssl-enabled: true
     # SSL密钥文件密码
     ssl-password: 123456
     # MQTT服务端是否强制要求Connect消息必须通过用户名密码验证

@@ -32,7 +32,7 @@ public class ProtocolProcess {
     @Inject
     private ISubscribeStoreService subscribeStoreService;
 
-    @Inject
+    //@Inject
     private IAuthService authService;
 
     @Inject

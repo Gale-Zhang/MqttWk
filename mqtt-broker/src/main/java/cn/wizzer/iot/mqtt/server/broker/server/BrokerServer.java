@@ -38,7 +38,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.net.ssl.KeyManagerFactory;
+import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLEngine;
+import javax.net.ssl.TrustManagerFactory;
 import java.io.InputStream;
 import java.security.KeyStore;
 import java.util.HashMap;
@@ -54,9 +56,11 @@ public class BrokerServer implements ServerFace {
     private BrokerProperties brokerProperties;
     @Inject("refer:$ioc")
     private Ioc ioc;
+    //处理客户端相关连接
     private EventLoopGroup bossGroup;
+    //处理IO读写、定时任务等内部工作
     private EventLoopGroup workerGroup;
-    private SslContext sslContext;
+    private SSLContext sslContext;
     private Channel channel;
     private Channel websocketChannel;
     private ChannelGroup channelGroup;
@@ -66,17 +70,33 @@ public class BrokerServer implements ServerFace {
         LOGGER.info("Initializing {} MQTT Broker ...", "[" + brokerProperties.getId() + "]");
         channelGroup = new DefaultChannelGroup(GlobalEventExecutor.INSTANCE);
         channelIdMap = new HashMap<>();
+        //初始化两个worker
         bossGroup = brokerProperties.getUseEpoll() ? new EpollEventLoopGroup(brokerProperties.getBossGroup_nThreads()) : new NioEventLoopGroup(brokerProperties.getBossGroup_nThreads());
         workerGroup = brokerProperties.getUseEpoll() ? new EpollEventLoopGroup(brokerProperties.getWorkerGroup_nThreads()) : new NioEventLoopGroup(brokerProperties.getWorkerGroup_nThreads());
+        //开启SSL则进行SSL相关初始化
         if (brokerProperties.getSslEnabled()) {
             KeyStore keyStore = KeyStore.getInstance("PKCS12");
-            InputStream inputStream = this.getClass().getClassLoader().getResourceAsStream("keystore/server.pfx");
+            InputStream inputStream = this.getClass().getClassLoader().getResourceAsStream("keystore/server_new.pfx");
+            LOGGER.debug("ssl password {}", brokerProperties.getSslPassword());
+            LOGGER.debug("input pfx stream {}", inputStream);
             keyStore.load(inputStream, brokerProperties.getSslPassword().toCharArray());
             KeyManagerFactory kmf = KeyManagerFactory.getInstance("SunX509");
             kmf.init(keyStore, brokerProperties.getSslPassword().toCharArray());
-            sslContext = SslContextBuilder.forServer(kmf).build();
+            KeyStore trustStore = KeyStore.getInstance("JKS");
+            InputStream caInputStream = this.getClass().getClassLoader().getResourceAsStream("keystore/ca.jks");
+            trustStore.load(caInputStream, brokerProperties.getSslPassword().toCharArray());
+            LOGGER.debug("input ca stream {}", caInputStream);
+            TrustManagerFactory tmf = TrustManagerFactory.getInstance("SunX509");
+            tmf.init(trustStore);
+            //sslContext = SslContextBuilder.forServer(kmf).build();
+
+            sslContext = SSLContext.getInstance("TLS");
+            //keyManagerFactory 自己的身份证,trustManagerFactory 自己的验证器
+            sslContext.init(kmf.getKeyManagers(), tmf.getTrustManagers(), null);
         }
+        //启动mqtt服务器
         mqttServer();
+        //启动websocket
         if (brokerProperties.getWebsocketEnabled()) {
             websocketServer();
             LOGGER.info("MQTT Broker {} is up and running. Open Port: {} WebSocketPort: {}", "[" + brokerProperties.getId() + "]", brokerProperties.getPort(), brokerProperties.getWebsocketPort());
@@ -125,9 +145,9 @@ public class BrokerServer implements ServerFace {
                         channelPipeline.addFirst("idle", new IdleStateHandler(0, 0, brokerProperties.getKeepAlive()));
                         // Netty提供的SSL处理
                         if (brokerProperties.getSslEnabled()) {
-                            SSLEngine sslEngine = sslContext.newEngine(socketChannel.alloc());
+                            SSLEngine sslEngine = sslContext.createSSLEngine();
                             sslEngine.setUseClientMode(false);        // 服务端模式
-                            sslEngine.setNeedClientAuth(false);        // 不需要验证客户端
+                            sslEngine.setNeedClientAuth(true);        // 不需要验证客户端
                             channelPipeline.addLast("ssl", new SslHandler(sslEngine));
                         }
                         channelPipeline.addLast("decoder", new MqttDecoder());
@@ -157,12 +177,12 @@ public class BrokerServer implements ServerFace {
                         // Netty提供的心跳检测
                         channelPipeline.addFirst("idle", new IdleStateHandler(0, 0, brokerProperties.getKeepAlive()));
                         // Netty提供的SSL处理
-                        if (brokerProperties.getSslEnabled()) {
-                            SSLEngine sslEngine = sslContext.newEngine(socketChannel.alloc());
-                            sslEngine.setUseClientMode(false);        // 服务端模式
-                            sslEngine.setNeedClientAuth(false);        // 不需要验证客户端
-                            channelPipeline.addLast("ssl", new SslHandler(sslEngine));
-                        }
+//                        if (brokerProperties.getSslEnabled()) {
+//                            SSLEngine sslEngine = sslContext.newEngine(socketChannel.alloc());
+//                            sslEngine.setUseClientMode(false);        // 服务端模式
+//                            sslEngine.setNeedClientAuth(false);        // 不需要验证客户端
+//                            channelPipeline.addLast("ssl", new SslHandler(sslEngine));
+//                        }
                         // 将请求和应答消息编码或解码为HTTP消息
                         channelPipeline.addLast("http-codec", new HttpServerCodec());
                         // 将HTTP消息的多个部分合成一条完整的HTTP消息

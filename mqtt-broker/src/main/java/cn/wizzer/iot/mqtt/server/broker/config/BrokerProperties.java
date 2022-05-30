@@ -64,8 +64,8 @@ public class BrokerProperties {
     /**
      * SSL是否启用
      */
-    private boolean sslEnabled;
     @PropDoc(group = "broker", value = "SSL是否启用", type = "boolean", defaultValue = "true")
+    private boolean sslEnabled;
     public static final String PROP_SSLENABLED = PRE + "ssl-enabled";
     /**
      * SSL密钥文件密码
